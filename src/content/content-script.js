@@ -199,8 +199,14 @@
     }, 200);
   }, true);
 
-  window.addEventListener('scroll', () => { if (activeField) positionButton(activeField); }, { passive: true });
-  window.addEventListener('resize', () => { if (activeField) positionButton(activeField); });
+  window.addEventListener('scroll', () => {
+    if (activeField) positionButton(activeField);
+    positionPanel();
+  }, { passive: true });
+  window.addEventListener('resize', () => {
+    if (activeField) positionButton(activeField);
+    positionPanel();
+  });
 
   // ── Hotkey: Alt+H ────────────────────────────────────────────────────────
 
@@ -266,7 +272,7 @@
       position: fixed;
       z-index: 2147483647;
       width: 370px;
-      max-height: 92vh;
+      max-height: 85vh; /* overridden dynamically by positionPanel */
       background: #ffffff;
       border-radius: 14px;
       box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
@@ -599,16 +605,44 @@
   function positionPanel() {
     const panel = shadow?.getElementById('panel');
     if (!panel) return;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    let top = 80, left = vw - 386;
+
+    const vw  = window.innerWidth;
+    const vh  = window.innerHeight;
+    const PW  = 370;
+    const GAP = 8;
+
+    let top, left, maxH;
+
     if (activeField) {
       const r = activeField.getBoundingClientRect();
-      top  = Math.min(r.bottom + 8, vh - 420);
-      left = Math.min(Math.max(r.left, 8), vw - 386);
-      if (top < 8) top = 8;
+      const spaceBelow = vh - r.bottom - GAP * 2;
+      const spaceAbove = r.top  - GAP * 2;
+
+      if (spaceBelow >= 200 || spaceBelow >= spaceAbove) {
+        // Enough room below — place under the field
+        top  = r.bottom + GAP;
+        maxH = vh - top - GAP;
+      } else {
+        // More room above — flip the panel up
+        maxH = Math.max(160, spaceAbove);
+        top  = r.top - GAP - maxH;
+      }
+
+      left = r.left;
+    } else {
+      top  = 60;
+      left = vw - PW - GAP;
+      maxH = vh - top - GAP;
     }
-    panel.style.top  = `${top}px`;
-    panel.style.left = `${left}px`;
+
+    // Hard clamps — panel must always be fully on-screen
+    top  = Math.max(GAP, top);
+    left = Math.max(GAP, Math.min(left, vw - PW - GAP));
+    maxH = Math.max(160, Math.min(maxH, vh - GAP * 2));
+
+    panel.style.top       = `${top}px`;
+    panel.style.left      = `${left}px`;
+    panel.style.maxHeight = `${maxH}px`;
   }
 
   function removePanel() {

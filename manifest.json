@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Hone",
+  "version": "1.0.0",
+  "description": "Improve your writing in place, in any text field. Learns your voice over time.",
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Hone — open settings"
+  }
+}

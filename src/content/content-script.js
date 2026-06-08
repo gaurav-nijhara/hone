@@ -177,17 +177,62 @@
     if (triggerBtn) triggerBtn.style.display = 'none';
   }
 
+  // ── Extension context guard ───────────────────────────────────────────────
+  // When the extension is reloaded while a tab is open the content script
+  // stays alive but loses its chrome API access. Every chrome.* call then
+  // throws "Extension context invalidated". We detect this once and clean up.
+
+  function contextValid() {
+    try { return !!chrome.runtime?.id; } catch { return false; }
+  }
+
+  function onContextLost() {
+    hideButton();
+    removePanel();
+    // Stop future event handlers from attempting chrome API calls
+    window.__honeLoaded = 'dead';
+  }
+
+  function safeStorage(fn) {
+    if (!contextValid()) { onContextLost(); return; }
+    try { fn(); } catch (e) {
+      if (e.message?.includes('invalidated')) onContextLost();
+      else console.warn('[Hone]', e.message);
+    }
+  }
+
+  function safeMessage(msg, cb) {
+    if (!contextValid()) {
+      onContextLost();
+      cb?.({ error: 'Extension was reloaded — refresh the page to use Hone again.' });
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(msg, cb);
+    } catch (e) {
+      if (e.message?.includes('invalidated')) {
+        onContextLost();
+        cb?.({ error: 'Extension was reloaded — refresh the page to use Hone again.' });
+      } else {
+        cb?.({ error: e.message });
+      }
+    }
+  }
+
   // ── Focus tracking ────────────────────────────────────────────────────────
 
   document.addEventListener('focusin', (e) => {
+    if (window.__honeLoaded === 'dead') return;
     const el = e.target;
     if (!isEditable(el) || isFieldExcluded(el)) return;
-    chrome.storage.local.get(['settings'], ({ settings }) => {
-      const deny  = settings?.denyList  || [];
-      const allow = settings?.allowList || [];
-      if (isOriginDenied(location.hostname, deny, allow)) return;
-      activeField = el;
-      showButton(el);
+    safeStorage(() => {
+      chrome.storage.local.get(['settings'], ({ settings }) => {
+        const deny  = settings?.denyList  || [];
+        const allow = settings?.allowList || [];
+        if (isOriginDenied(location.hostname, deny, allow)) return;
+        activeField = el;
+        showButton(el);
+      });
     });
   }, true);
 
@@ -237,17 +282,19 @@
     activeField    = field;
     currentState   = { text, field, iterations: [] };
 
-    chrome.storage.local.get(['settings'], ({ settings }) => {
-      const register = settings?.defaultRegister || 'professional';
-      currentState.register = register;
-      showPanel({ loading: true, register });
-      requestRewrite(text, register, null);
+    safeStorage(() => {
+      chrome.storage.local.get(['settings'], ({ settings }) => {
+        const register = settings?.defaultRegister || 'professional';
+        currentState.register = register;
+        showPanel({ loading: true, register });
+        requestRewrite(text, register, null);
+      });
     });
   }
 
   function requestRewrite(text, register, steeringNote) {
     const medium = detectMedium();
-    chrome.runtime.sendMessage(
+    safeMessage(
       { type: 'REWRITE', payload: { text, register, medium, steeringNote } },
       (res) => {
         if (chrome.runtime.lastError) {
@@ -667,10 +714,14 @@
       rewrite:   redact(entry.rewrite),
       finalText: entry.finalText ? redact(entry.finalText) : undefined,
     };
-    chrome.storage.local.get(['interactionLog'], ({ interactionLog }) => {
-      const log = (interactionLog || []).concat({ ...safe, timestamp: Date.now() }).slice(-500);
-      chrome.storage.local.set({ interactionLog: log }, () => {
-        if (log.length % 10 === 0) chrome.runtime.sendMessage({ type: 'MAYBE_DISTILL' });
+    safeStorage(() => {
+      chrome.storage.local.get(['interactionLog'], ({ interactionLog }) => {
+        const log = (interactionLog || []).concat({ ...safe, timestamp: Date.now() }).slice(-500);
+        safeStorage(() => {
+          chrome.storage.local.set({ interactionLog: log }, () => {
+            if (log.length % 10 === 0) safeMessage({ type: 'MAYBE_DISTILL' });
+          });
+        });
       });
     });
   }

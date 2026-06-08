@@ -296,6 +296,12 @@
     }
     .hdr-left { display: flex; align-items: center; gap: 8px; }
     .logo { font-weight: 800; font-size: 14px; color: #fff; letter-spacing: 0.3px; }
+    .cached-badge {
+      font-size: 10px; font-weight: 600;
+      background: rgba(99,102,241,0.3); border: 1px solid rgba(99,102,241,0.5);
+      border-radius: 100px; padding: 2px 7px; color: rgba(255,255,255,0.85);
+      letter-spacing: 0.2px;
+    }
 
     select.reg {
       background: rgba(255,255,255,0.12);
@@ -452,6 +458,7 @@
       <div class="hdr">
         <div class="hdr-left">
           <span class="logo">Hone</span>
+          ${state.result?.fromCache ? '<span class="cached-badge">⚡ cached</span>' : ''}
           <select class="reg" id="reg">
             ${['professional','concise','diplomatic','confident'].map((r) =>
               `<option value="${r}" ${reg === r ? 'selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`
